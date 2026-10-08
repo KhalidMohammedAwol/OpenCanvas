@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "FilmBoard Capture",
+  "version": "0.1.0",
+  "description": "Capture Pinterest references and first scene thoughts into your local FilmBoard Inbox.",
+  "permissions": ["storage", "contextMenus", "alarms"],
+  "host_permissions": ["https://www.pinterest.com/*", "https://*.pinterest.com/*", "http://127.0.0.1:43117/*"],
+  "background": { "service_worker": "background.js" },
+  "options_ui": { "page": "options.html", "open_in_tab": true },
+  "content_scripts": [{ "matches": ["https://www.pinterest.com/*", "https://*.pinterest.com/*"], "js": ["content.js"], "run_at": "document_idle" }]
+}
