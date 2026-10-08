@@ -5,16 +5,19 @@ const processed = new WeakSet<Element>();
 
 function sourceFor(image: HTMLImageElement): { pageUrl: string; imageUrl: string; title?: string } {
   const anchor = image.closest("a");
-  const title = image.alt || "";
+  const pin = image.closest<HTMLElement>('[data-test-id="pin"]') ?? anchor?.parentElement;
+  const heading = pin?.querySelector("h1, h2, h3, [data-test-id='pin-title']");
+  const title = heading?.textContent?.trim() || anchor?.getAttribute("title")?.trim() || "";
   return { pageUrl: anchor?.href ?? location.href, imageUrl: image.currentSrc || image.src, ...(title ? { title } : {}) };
 }
 
 function capture(image: HTMLImageElement, noteText = "", captureId = crypto.randomUUID()): void {
   const source = sourceFor(image);
   const envelope: CaptureEnvelope = { schemaVersion: 1, captureId, operationId: crypto.randomUUID(), source: { site: "pinterest", pageUrl: source.pageUrl, imageCandidateUrl: source.imageUrl, ...(source.title ? { title: source.title } : {}) }, capture: { capturedAt: new Date().toISOString(), noteText, noteRevision: 0 }, intent: noteText ? "quick-note" : "save" };
-  chrome.runtime.sendMessage({ type: "capture", envelope }, (response: { queued?: boolean; error?: string }) => {
-    if (chrome.runtime.lastError || !response?.queued) { toast(image, "Couldn't queue capture"); return; }
-    toast(image, noteText ? "Saved note in browser" : "Saved in browser");
+  chrome.runtime.sendMessage({ type: "capture", envelope }, (response: { queued?: boolean; delivered?: boolean; lastError?: string; error?: string }) => {
+    if (chrome.runtime.lastError || !response?.queued) { toast(image, response?.error ?? "Couldn't queue capture"); return; }
+    if (response.delivered) toast(image, "Saved to FilmBoard");
+    else toast(image, response.lastError ? `Queued — ${response.lastError}` : "Queued — waiting for FilmBoard");
   });
 }
 
@@ -34,7 +37,7 @@ function inject(): void {
   document.querySelectorAll<HTMLImageElement>("img").forEach((image) => {
     if (processed.has(image) || image.naturalWidth < 120 || image.naturalHeight < 120) return;
     processed.add(image); const host = image.parentElement; if (!host) return; if (getComputedStyle(host).position === "static") host.style.position = "relative";
-    const controls = document.createElement("span"); controls.className = "filmboard-controls"; controls.innerHTML = `<button title="Save to FilmBoard">Save</button><button title="Quick Note">✎</button>`; const style = document.createElement("style"); style.textContent = `.filmboard-controls{position:absolute;right:8px;top:8px;z-index:3;display:none;gap:4px}.filmboard-controls button{border:0;border-radius:5px;background:#181a1eec;color:#f3c98e;padding:6px 8px;cursor:pointer;font:700 11px system-ui}.filmboard-controls button+button{padding-inline:7px}.filmboard-toast{position:absolute}`; controls.append(style); host.append(controls); host.addEventListener("mouseenter", () => { controls.style.display = "flex"; }); host.addEventListener("mouseleave", () => { controls.style.display = "none"; }); const buttons = controls.querySelectorAll("button"); buttons[0]?.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); capture(image); }); buttons[0]?.addEventListener("contextmenu", (event) => { event.preventDefault(); event.stopPropagation(); openNote(image); }); buttons[0]?.addEventListener("click", (event) => { if (event.altKey) { event.preventDefault(); event.stopPropagation(); openNote(image); } }); buttons[1]?.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); openNote(image); });
+    const controls = document.createElement("span"); controls.className = "filmboard-controls"; controls.innerHTML = `<button type="button" title="Save to FilmBoard">Save</button><button type="button" title="Quick Note">✎</button>`; const style = document.createElement("style"); style.textContent = `.filmboard-controls{position:absolute;right:8px;top:8px;z-index:2147483646;display:none;gap:4px}.filmboard-controls button{border:0;border-radius:5px;background:#181a1eec;color:#f3c98e;padding:6px 8px;cursor:pointer;font:700 11px system-ui}.filmboard-controls button+button{padding-inline:7px}.filmboard-toast{position:absolute}`; controls.append(style); host.append(controls); host.addEventListener("mouseenter", () => { controls.style.display = "flex"; }); host.addEventListener("mouseleave", () => { controls.style.display = "none"; }); const buttons = controls.querySelectorAll("button"); const stopPinterestEvent = (event: Event) => { event.stopPropagation(); }; buttons.forEach((button) => button.addEventListener("pointerdown", stopPinterestEvent)); buttons[0]?.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); if (event.altKey) openNote(image); else capture(image); }); buttons[0]?.addEventListener("contextmenu", (event) => { event.preventDefault(); event.stopPropagation(); openNote(image); }); buttons[1]?.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); openNote(image); });
   });
 }
 

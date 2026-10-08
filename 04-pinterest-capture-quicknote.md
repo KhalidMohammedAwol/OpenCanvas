@@ -15,9 +15,9 @@ Validate FilmBoard's highest-risk differentiator: capture a reference and the fi
 - [x] Inject FilmBoard-owned Save and note controls with duplicate protection and hover visibility.
 - [x] Implement plain Save: UUID, durable queue write, transfer status, and link-only fallback.
 - [x] Implement Quick Note overlay with image preview, multiline editor, and close controls.
-- [ ] Journal every note input locally; batch network delivery only after local durability.
-- [ ] Implement note icon and Option/Alt-click as mandatory reliable triggers.
-- [ ] Implement best-effort Control-click interception only on FilmBoard controls; preserve ordinary Pinterest right-click behavior.
+- [x] Journal every note input locally; batch network delivery only after local durability.
+- [x] Implement note icon and Option/Alt-click as mandatory reliable triggers.
+- [x] Implement best-effort Control-click interception only on FilmBoard controls; preserve ordinary Pinterest right-click behavior.
 - [ ] Add deterministic DOM fixtures before relying on live Pinterest selectors.
 - [ ] Test 200+ dynamic tiles, detail-page navigation, overlay persistence, keyboard navigation, reduced motion, and screen-reader labels.
 
@@ -27,10 +27,10 @@ Acceptance tests AC-CAP-01 through AC-CAP-07 pass against fixtures, and the live
 
 ## Resume here
 
-The first content-script capture path is bundled; next add fixture tests, durable text journaling, and gesture fallbacks before calling this phase complete.
+Plain Save and Quick Note share the same queue/API path. An empty note was rejected by contract validation, which made unannotated captures stay out of the Inbox; empty note strings are now valid and the extension reports whether a capture reached the service or is only queued. The content script no longer treats image alt text as a title. Deterministic Pinterest fixtures and live acceptance coverage remain before calling this phase complete.
 
 ## Verification log
 
 - Commands: `npm run build --workspace @filmboard/extension`.
-- Result: content controls and Quick Note overlay are bundled; fixture and live Pinterest acceptance coverage remains.
-- Notes: The current first slice intentionally uses a resilient image scan while the Pinterest-specific fixture adapter is hardened.
+- Result: plain-save empty-note validation regression is covered by contract and service tests; rebuilt extension controls report delivery status. Alt text is no longer used as the capture title to avoid copying Pinterest descriptions into FilmBoard cards. Fixture and live Pinterest acceptance coverage remains.
+- Notes: The current first slice intentionally uses a resilient image scan while the Pinterest-specific fixture adapter is hardened. After source changes, rebuild via `npm run build --workspace @filmboard/extension`, then reload the unpacked extension at `apps/extension/dist` and refresh Pinterest tabs.

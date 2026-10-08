@@ -1,8 +1,8 @@
 # FilmBoard V1 implementation index
 
-Status: planning complete; implementation has not started.
+Status: implementation in progress; phases 01–02 complete, phases 03–06 underway.
 
-This repository currently contains only the README and license. The source specification is the Capture-First V1 document prepared 7 October 2026. These checkpoint files split the work into small resumable units.
+The monorepo now contains the shared contracts, local SQLite/Fastify service, MV3 extension, and React/Vite app. The source specification is the Capture-First V1 document prepared 7 October 2026. These checkpoint files split the work into small resumable units.
 
 ## Delivery strategy
 
@@ -39,7 +39,7 @@ At the end of every work session:
 - Keep changes small enough to review independently.
 - Do not mark a phase complete unless its exit criteria are verified.
 
-At the start of the next session, read this file and the first phase file whose status is not `complete`.
+At the start of the next session, read this file and the first phase file whose status is not `complete`. Current work is concentrated on finishing Phase 03 capture reliability, Phase 04 Pinterest fixture/live acceptance, and Phase 06 Inbox-to-board organization. See their `Resume here` and verification sections for the latest handoff.
 
 ## Global constraints
 

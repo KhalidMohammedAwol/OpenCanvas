@@ -23,6 +23,11 @@ test("validates a capture envelope", () => {
   assert.deepEqual(validateCaptureEnvelope(envelope), envelope);
 });
 
+test("allows an empty note for a plain save", () => {
+  const plainSave = { ...envelope, capture: { ...envelope.capture, noteText: "" }, intent: "save" };
+  assert.equal(validateCaptureEnvelope(plainSave).capture.noteText, "");
+});
+
 test("rejects non-HTTP source URLs", () => {
   assert.throws(() => validateCaptureEnvelope({
     ...envelope,

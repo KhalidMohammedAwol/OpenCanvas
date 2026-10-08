@@ -307,17 +307,23 @@ export class FilmBoardDatabase {
     return { projectId: exported.project.id, boardCount: exported.boards.length, captureCount: exported.captures.length };
   }
 
-  placeCapture(captureId: string, boardId: string): { nodeId: string; boardId: string; captureId: string } {
+  placeCapture(captureId: string, boardId: string, position?: { x: number; y: number }): { nodeId: string; boardId: string; captureId: string } {
     if (!this.getCapture(captureId)) throw new Error("CAPTURE_NOT_FOUND");
     const board = this.sqlite.prepare("SELECT id FROM boards WHERE id = ?").get(boardId) as { id: string } | undefined;
     if (!board) throw new Error("BOARD_NOT_FOUND");
     const existing = this.sqlite.prepare("SELECT node_id as nodeId FROM capture_placements WHERE capture_id = ? AND board_id = ? LIMIT 1").get(captureId, boardId) as { nodeId: string } | undefined;
-    if (existing) return { nodeId: existing.nodeId, boardId, captureId };
+    if (existing) {
+      if (position) this.sqlite.prepare("UPDATE board_nodes SET x = ?, y = ?, updated_at = ? WHERE id = ? AND board_id = ?").run(position.x, position.y, new Date().toISOString(), existing.nodeId, boardId);
+      return { nodeId: existing.nodeId, boardId, captureId };
+    }
+    const count = this.sqlite.prepare("SELECT COUNT(*) as count FROM board_nodes WHERE board_id = ?").get(boardId) as { count: number };
+    const x = position?.x ?? 40 + (count.count % 3) * 360;
+    const y = position?.y ?? 40 + Math.floor(count.count / 3) * 330;
     const now = new Date().toISOString();
     const nodeId = randomUUID();
     this.sqlite.exec("BEGIN IMMEDIATE");
     try {
-      this.sqlite.prepare("INSERT INTO board_nodes (id, board_id, type, x, y, width, height, z_rank, props_json, created_at, updated_at) VALUES (?, ?, 'image', 0, 0, 320, 240, 0, ?, ?, ?)").run(nodeId, boardId, JSON.stringify({ captureId }), now, now);
+      this.sqlite.prepare("INSERT INTO board_nodes (id, board_id, type, x, y, width, height, z_rank, props_json, created_at, updated_at) VALUES (?, ?, 'image', ?, ?, 320, 280, ?, ?, ?, ?)").run(nodeId, boardId, x, y, count.count, JSON.stringify({ captureId }), now, now);
       this.sqlite.prepare("INSERT INTO capture_placements (capture_id, board_id, node_id, placed_at) VALUES (?, ?, ?, ?)").run(captureId, boardId, nodeId, now);
       this.sqlite.exec("COMMIT");
     } catch (error) {

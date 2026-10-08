@@ -26,15 +26,25 @@ export function buildApp(options: AppOptions = {}): FastifyInstance & { database
   const app = Fastify({ logger: options.logger ?? false }) as unknown as FastifyInstance & { database: FilmBoardDatabase };
   app.database = database;
 
+  app.addHook("onRequest", async (request, reply) => {
+    const rawHost = request.headers.host;
+    const host = Array.isArray(rawHost) ? rawHost[0] : rawHost;
+    if (host && !/^(127\.0\.0\.1|localhost)(:\d+)?$/.test(host)) return reply.code(403).send({ error: { code: "HOST_NOT_ALLOWED", message: "Local service accepts loopback hosts only", retryable: false, requestId: randomUUID() } });
+    const rawOrigin = request.headers.origin;
+    const origin = Array.isArray(rawOrigin) ? rawOrigin[0] : rawOrigin;
+    if (origin && !/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(origin) && !origin.startsWith("chrome-extension://")) return reply.code(403).send({ error: { code: "ORIGIN_NOT_ALLOWED", message: "Origin is not allowed", retryable: false, requestId: randomUUID() } });
+  });
+
   app.get("/health", async () => ({ ok: true, service: "filmboard-local", version: "0.1.0" }));
 
   const extensionAuthorized = (request: { headers: Record<string, string | string[] | undefined> }, scope: "capture:create" | "capture:update" | "inbox:read"): boolean => {
     const rawOrigin = request.headers.origin;
     const origin = Array.isArray(rawOrigin) ? rawOrigin[0] : rawOrigin;
     if (!origin?.startsWith("chrome-extension://")) return true;
+    const extensionId = new URL(origin).hostname;
     const rawToken = request.headers["x-filmboard-token"];
     const token = Array.isArray(rawToken) ? rawToken[0] : rawToken;
-    return pairing.authorize(token, scope);
+    return pairing.authorize(token, scope, extensionId);
   };
 
   app.post("/api/v1/pairings/start", async (_request, reply) => reply.send(pairing.start()));
@@ -69,15 +79,19 @@ export function buildApp(options: AppOptions = {}): FastifyInstance & { database
 
   app.get<{ Querystring: { q?: string; limit?: string; offset?: string } }>("/api/v1/captures", async (request) => {
     if (!extensionAuthorized(request, "inbox:read")) return { error: { code: "PAIRING_REQUIRED", message: "Pair the FilmBoard extension before reading Inbox", retryable: false, requestId: randomUUID() } };
-    return { items: database.listCaptures(request.query.q, Number(request.query.limit ?? 50), Number(request.query.offset ?? 0)) };
+    const limitValue = Number(request.query.limit ?? 50);
+    const offsetValue = Number(request.query.offset ?? 0);
+    return { items: database.listCaptures(request.query.q, Number.isFinite(limitValue) ? limitValue : 50, Number.isFinite(offsetValue) ? offsetValue : 0) };
   });
 
   app.get<{ Params: { captureId: string } }>("/api/v1/captures/:captureId", async (request, reply) => {
+    if (!extensionAuthorized(request, "inbox:read")) return reply.code(401).send({ error: { code: "PAIRING_REQUIRED", message: "Pair the FilmBoard extension before reading a capture", retryable: false, requestId: randomUUID() } });
     const capture = database.getCapture(request.params.captureId);
     return capture ? reply.send(capture) : reply.code(404).send({ error: { code: "CAPTURE_NOT_FOUND", message: "Capture not found", retryable: false, requestId: randomUUID() } });
   });
 
   app.post<{ Params: { captureId: string } }>("/api/v1/captures/:captureId/archive", async (request, reply) => {
+    if (!extensionAuthorized(request, "capture:update")) return reply.code(401).send({ error: { code: "PAIRING_REQUIRED", message: "Pair the FilmBoard extension before archiving a capture", retryable: false, requestId: randomUUID() } });
     return database.archiveCapture(request.params.captureId) ? reply.send({ archived: true }) : reply.code(404).send({ error: { code: "CAPTURE_NOT_FOUND", message: "Capture not found", retryable: false, requestId: randomUUID() } });
   });
 
@@ -113,9 +127,13 @@ export function buildApp(options: AppOptions = {}): FastifyInstance & { database
     catch (error) { return reply.code(400).send({ error: { code: errorCode(error), message: error instanceof Error ? error.message : "Invalid project export", retryable: false, requestId: randomUUID() } }); }
   });
 
-  app.post<{ Params: { captureId: string }; Body: { boardId: string } }>("/api/v1/captures/:captureId/place", async (request, reply) => {
+  app.post<{ Params: { captureId: string }; Body: { boardId: string; x?: number; y?: number } }>("/api/v1/captures/:captureId/place", async (request, reply) => {
     try {
-      return reply.code(201).send(database.placeCapture(request.params.captureId, request.body.boardId));
+      const { x, y } = request.body;
+      if ((x !== undefined && !Number.isFinite(x)) || (y !== undefined && !Number.isFinite(y)) || (x === undefined) !== (y === undefined)) {
+        return reply.code(400).send({ error: { code: "BOARD_POSITION_INVALID", message: "Both finite x and y coordinates are required when placing at a position", retryable: false, requestId: randomUUID() } });
+      }
+      return reply.code(201).send(database.placeCapture(request.params.captureId, request.body.boardId, x === undefined || y === undefined ? undefined : { x, y }));
     } catch (error) {
       const code = errorCode(error);
       return reply.code(code.endsWith("NOT_FOUND") ? 404 : 400).send({ error: { code, message: error instanceof Error ? error.message : "Unable to place capture", retryable: false, requestId: randomUUID() } });

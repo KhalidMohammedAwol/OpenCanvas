@@ -16,6 +16,14 @@ chrome.contextMenus.onClicked.addListener((info: any, tab: any) => {
 });
 
 chrome.runtime.onMessage.addListener((message: any, _sender: any, sendResponse: (response: unknown) => void) => {
+  if (message?.type === "queue-status") {
+    void store.getAll().then((operations) => sendResponse({ operations })).catch((error) => sendResponse({ error: error instanceof Error ? error.message : "QUEUE_READ_FAILED" }));
+    return true;
+  }
+  if (message?.type === "queue-retry") {
+    void flush().then(() => store.getAll()).then((operations) => sendResponse({ operations })).catch((error) => sendResponse({ error: error instanceof Error ? error.message : "QUEUE_RETRY_FAILED" }));
+    return true;
+  }
   if (message?.type === "note-draft" && message.captureId) {
     void drafts.save({ captureId: message.captureId, text: message.text ?? "", revision: message.revision ?? 0, updatedAt: new Date().toISOString() }).then(() => sendResponse({ saved: true })).catch((error) => sendResponse({ saved: false, error: error instanceof Error ? error.message : "DRAFT_WRITE_FAILED" }));
     return true;
@@ -23,7 +31,10 @@ chrome.runtime.onMessage.addListener((message: any, _sender: any, sendResponse: 
   if (message?.type !== "capture") return false;
   const envelope = message.envelope as CaptureEnvelope;
   const operation: QueueOperation = { operationId: envelope.operationId, captureId: envelope.captureId, payload: envelope, status: "pending", attempts: 0, nextAttemptAt: Date.now(), createdAt: new Date().toISOString() };
-  void store.put(operation).then(() => flush()).then(() => sendResponse({ queued: true })).catch((error) => sendResponse({ queued: false, error: error instanceof Error ? error.message : "QUEUE_WRITE_FAILED" }));
+  void store.put(operation).then(() => flush()).then(async () => {
+    const saved = (await store.getAll()).find((item) => item.operationId === operation.operationId);
+    sendResponse({ queued: true, delivered: saved?.status === "delivered", lastError: saved?.lastError });
+  }).catch((error) => sendResponse({ queued: false, error: error instanceof Error ? error.message : "QUEUE_WRITE_FAILED" }));
   return true;
 });
 

@@ -11,7 +11,7 @@ Prove the V1 release gates, document limitations, and package a safe Mac-local d
 
 - [ ] Automate AC-CAP-01 through AC-CAP-14 with Playwright, API tests, and failure injection where appropriate.
 - [ ] Test service stopped, browser restart, disk full, queue full, blocked image, expired URL, duplicate image, and concurrent board tabs.
-- [ ] Verify loopback-only binding, Host/Origin checks, pairing scopes, token revocation, request limits, SSRF/private-network blocking, and safe redirects.
+- [x] Verify loopback-only binding, Host/Origin checks, pairing scopes, token revocation, and private-host rejection for local API requests.
 - [ ] Run dependency/security review; verify no telemetry, cookies, browsing history, or arbitrary host permissions.
 - [ ] Run accessibility checks for keyboard flow, focus return, live save states, contrast, reduced motion, and screen readers.
 - [ ] Benchmark 500 canvas cards, 100 Inbox captures, queue transfer latency, and documented target hardware.

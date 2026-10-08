@@ -174,7 +174,7 @@ export function validateCaptureEnvelope(value: unknown): CaptureEnvelope {
     }
   }
   requireString(value.capture.capturedAt, "capture.capturedAt");
-  requireString(value.capture.noteText, "capture.noteText");
+  requireText(value.capture.noteText, "capture.noteText");
   if (value.capture.noteText.length > 20_000) throw new Error("NOTE_TOO_LONG");
   requireIntegerAtLeast(value.capture.noteRevision, 0, "capture.noteRevision");
   if (value.intent !== "save" && value.intent !== "quick-note" && value.intent !== "context-menu") {
@@ -186,7 +186,7 @@ export function validateCaptureEnvelope(value: unknown): CaptureEnvelope {
 export function validateNoteUpdateRequest(value: unknown): NoteUpdateRequest {
   if (!isRecord(value)) throw new Error("NOTE_INVALID: request must be an object");
   requireString(value.operationId, "operationId");
-  requireString(value.text, "text");
+  requireText(value.text, "text");
   requireString(value.updatedAt, "updatedAt");
   requireIntegerAtLeast(value.revision, 1, "revision");
   if (value.text.length > 20_000) throw new Error("NOTE_TOO_LONG");
@@ -203,6 +203,10 @@ function requireRecord(value: unknown, name: string): asserts value is Record<st
 
 function requireString(value: unknown, name: string): asserts value is string {
   if (typeof value !== "string" || value.length === 0) throw new Error(`CAPTURE_INVALID: ${name} is required`);
+}
+
+function requireText(value: unknown, name: string): asserts value is string {
+  if (typeof value !== "string") throw new Error(`CAPTURE_INVALID: ${name} must be a string`);
 }
 
 function requireIntegerAtLeast(value: unknown, minimum: number, name: string): asserts value is number {

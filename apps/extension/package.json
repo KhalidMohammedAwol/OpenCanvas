@@ -7,7 +7,7 @@
     "@filmboard/contracts": "0.1.0"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json --noEmit && vite build --mode background && vite build --mode content && vite build --mode options",
+    "build": "tsc -p tsconfig.json --noEmit && vite build --mode background && vite build --mode content && vite build --mode options && vite build --mode popup",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test test/*.test.mjs",
     "lint": "tsc -p tsconfig.json --noEmit"

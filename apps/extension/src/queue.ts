@@ -13,6 +13,7 @@ export type QueueOperation = {
 
 export interface QueueStore {
   put(operation: QueueOperation): Promise<void>;
+  getAll(): Promise<QueueOperation[]>;
   getPending(now?: number): Promise<QueueOperation[]>;
   markDelivered(operationId: string): Promise<void>;
   markFailed(operationId: string, error: string, nextAttemptAt: number): Promise<void>;
@@ -64,6 +65,15 @@ export class IndexedDbQueueStore implements QueueStore {
     await this.transaction(database, "readwrite", (store) => store.put(operation));
   }
 
+  async getAll(): Promise<QueueOperation[]> {
+    const database = await this.open();
+    return this.transaction<QueueOperation[]>(database, "readonly", (store, resolve, reject) => {
+      const request = store.getAll();
+      request.onsuccess = () => resolve(request.result as QueueOperation[]);
+      request.onerror = () => reject(request.error ?? new Error("QUEUE_READ_FAILED"));
+    });
+  }
+
   async getPending(now = Date.now()): Promise<QueueOperation[]> {
     const database = await this.open();
     return this.transaction<QueueOperation[]>(database, "readonly", (store, resolve, reject) => {
@@ -105,9 +115,17 @@ export class IndexedDbQueueStore implements QueueStore {
   private transaction<T = void>(database: IDBDatabase, mode: IDBTransactionMode, action: (store: IDBObjectStore, resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: unknown) => void) => void): Promise<T> {
     return new Promise((resolve, reject) => {
       const transaction = database.transaction(this.storeName, mode);
-      action(transaction.objectStore(this.storeName), resolve, reject);
-      transaction.onerror = () => reject(transaction.error ?? new Error("QUEUE_TRANSACTION_FAILED"));
-      transaction.oncomplete = () => database.close();
+      let result: T | PromiseLike<T>;
+      const fail = (reason?: unknown) => { database.close(); reject(reason ?? new Error("QUEUE_TRANSACTION_FAILED")); };
+      transaction.onerror = () => fail(transaction.error);
+      transaction.onabort = () => fail(transaction.error ?? new Error("QUEUE_TRANSACTION_ABORTED"));
+      transaction.oncomplete = () => { database.close(); resolve(result); };
+      try {
+        action(transaction.objectStore(this.storeName), (value) => { result = value; }, fail);
+      } catch (error) {
+        transaction.abort();
+        fail(error);
+      }
     });
   }
 }

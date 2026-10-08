@@ -20,6 +20,8 @@ test("persists idempotent captures and monotonic notes", async () => {
   try {
     const health = await app.inject({ method: "GET", url: "/health" });
     assert.equal(health.statusCode, 200);
+    const hostile = await app.inject({ method: "GET", url: "/health", headers: { host: "evil.example" } });
+    assert.equal(hostile.statusCode, 403);
     const pairing = await app.inject({ method: "POST", url: "/api/v1/pairings/start" });
     assert.equal(pairing.statusCode, 200);
 
@@ -28,6 +30,12 @@ test("persists idempotent captures and monotonic notes", async () => {
     const replay = await app.inject({ method: "POST", url: "/api/v1/captures", payload: envelope });
     assert.equal(replay.statusCode, 201);
     assert.equal(JSON.parse(replay.body).captureId, envelope.captureId);
+
+    const plainSave = { ...envelope, captureId: "capture-plain-save", operationId: "operation-plain-save", capture: { ...envelope.capture, noteText: "" }, intent: "save" };
+    const plainSaveResponse = await app.inject({ method: "POST", url: "/api/v1/captures", payload: plainSave });
+    assert.equal(plainSaveResponse.statusCode, 201);
+    const plainSaveDetail = await app.inject({ method: "GET", url: `/api/v1/captures/${plainSave.captureId}` });
+    assert.equal(JSON.parse(plainSaveDetail.body).note.text, "");
 
     const update = await app.inject({ method: "PATCH", url: `/api/v1/captures/${envelope.captureId}/note`, payload: { operationId: "operation-e2e-note-1", revision: 1, text: "The figure waits outside in the rain.", updatedAt: "2026-10-08T07:01:00Z" } });
     assert.equal(update.statusCode, 200);
@@ -47,11 +55,15 @@ test("persists idempotent captures and monotonic notes", async () => {
     assert.equal(preview.headers["content-type"].startsWith("image/png"), true);
     const createdBoard = await app.inject({ method: "POST", url: "/api/v1/boards", payload: { boardTitle: "Export board" } });
     const createdBoardBody = JSON.parse(createdBoard.body);
-    await app.inject({ method: "POST", url: `/api/v1/captures/${envelope.captureId}/place`, payload: { boardId: createdBoardBody.id } });
+    await app.inject({ method: "POST", url: `/api/v1/captures/${envelope.captureId}/place`, payload: { boardId: createdBoardBody.id, x: 520, y: -140 } });
     const boardList = await app.inject({ method: "GET", url: "/api/v1/boards" });
     const boardId = JSON.parse(boardList.body).items[0].id;
     const boardGraph = await app.inject({ method: "GET", url: `/api/v1/boards/${boardId}` });
     const movedNode = JSON.parse(boardGraph.body).nodes[0];
+    assert.equal(movedNode.x, 520);
+    assert.equal(movedNode.y, -140);
+    const invalidPosition = await app.inject({ method: "POST", url: `/api/v1/captures/${envelope.captureId}/place`, payload: { boardId, x: Number.NaN, y: 4 } });
+    assert.equal(invalidPosition.statusCode, 400);
     const snapshot = await app.inject({ method: "PUT", url: `/api/v1/boards/${boardId}/snapshot`, payload: { viewportJson: JSON.stringify({ x: 4, y: 8, zoom: 1.2 }), nodes: [{ ...movedNode, x: 160, y: 90 }] } });
     assert.equal(snapshot.statusCode, 200);
     const exported = await app.inject({ method: "POST", url: `/api/v1/exports/projects/${JSON.parse(boardList.body).items[0].projectId}` });

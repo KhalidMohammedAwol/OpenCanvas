@@ -18,9 +18,10 @@ export class PairingManager {
   }
 
   confirm(code: string, extensionId: string): { token: string; scopes: PairingScope[] } {
+    if (!extensionId || !extensionId.trim()) throw new Error("PAIRING_INVALID");
     if (!this.pending || this.pending.expiresAt < Date.now() || !safeEqual(this.pending.hash, digest(code))) throw new Error("PAIRING_INVALID");
     const token = randomBytes(32).toString("base64url");
-    this.tokens.set(digest(token), { hash: digest(token), extensionId, scopes: new Set(SCOPES), revoked: false });
+    this.tokens.set(digest(token), { hash: digest(token), extensionId: extensionId.trim(), scopes: new Set(SCOPES), revoked: false });
     this.pending = undefined;
     return { token, scopes: [...SCOPES] };
   }
@@ -30,10 +31,12 @@ export class PairingManager {
     if (record) record.revoked = true;
   }
 
-  authorize(token: string | undefined, scope: PairingScope): boolean {
+  authorize(token: string | undefined, scope: PairingScope, extensionId?: string): boolean {
     if (!token) return false;
     const record = this.tokens.get(digest(token));
-    return Boolean(record && !record.revoked && record.scopes.has(scope));
+    if (!record || record.revoked || !record.scopes.has(scope)) return false;
+    if (!extensionId) return true;
+    return record.extensionId === extensionId.trim();
   }
 }
 
